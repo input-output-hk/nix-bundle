@@ -1,4 +1,4 @@
-{nixpkgs ? import <nixpkgs> {}}:
+{ nixpkgs ? import <nixpkgs> {} }:
 
 with nixpkgs;
 
@@ -10,11 +10,11 @@ let
     '';
   });
 in rec {
-  arx = { archive, startup}:
+  arx = { archive, startup, rmStyle, shared }:
     stdenv.mkDerivation {
       name = "arx";
       buildCommand = ''
-        ${arx'}/bin/arx tmpx --shared -rm! ${archive} -o $out // ${startup}
+        ${arx'}/bin/arx tmpx ${lib.optionalString shared "--shared"} ${rmStyle} ${archive} -o $out // ${startup}
         chmod +x $out
       '';
     };
@@ -60,9 +60,9 @@ in rec {
     '';
   };
 
-  makebootstrap = { targets, startup }:
+  makebootstrap = { targets, startup, rmStyle, shared }:
     arx {
-      inherit startup;
+      inherit startup rmStyle shared;
       archive = maketar {
         inherit targets;
       };
@@ -70,15 +70,16 @@ in rec {
 
   makeStartup = { target, nixUserChrootFlags, nix-user-chroot', run }:
   writeScript "startup" ''
-.${nix-user-chroot'}/bin/nix-user-chroot -n ./nix ${nixUserChrootFlags} -- ${target}${run} $@
+    .${nix-user-chroot'}/bin/nix-user-chroot -n ./nix ${nixUserChrootFlags} -- ${target}${run} $@
   '';
 
-  nix-bootstrap = { target, extraTargets ? [], run, nix-user-chroot' ? nix-user-chroot, nixUserChrootFlags ? "" }:
+  nix-bootstrap = { target, extraTargets ? [], run, nix-user-chroot' ? nix-user-chroot, nixUserChrootFlags ? "", rmStyle ? "-rm!", shared ? true }:
     let
       script = makeStartup { inherit target nixUserChrootFlags nix-user-chroot' run; };
     in makebootstrap {
       startup = ".${script} '\"$@\"'";
       targets = [ "${script}" ] ++ extraTargets;
+      inherit rmStyle shared;
     };
 
   nix-bootstrap-nix = {target, run, extraTargets ? []}:
